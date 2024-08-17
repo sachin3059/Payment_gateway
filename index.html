@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="stylesheet" href="./style.css">
+  <title>Razorpay Payment</title>
+
+  <script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+  <script>
+    async function payNow() {
+      const amount = document.getElementById('amount').value;
+
+      try {
+        // Create order by calling the server endpoint
+        const response = await fetch('/create-order', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ amount, currency: 'INR', receipt: 'receipt#1', notes: {} })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to create order');
+        }
+
+        const order = await response.json();
+
+        // Open Razorpay Checkout
+        const options = {
+          key: 'RAZORPAY_KEY_ID', // Replace with your Razorpay key_id
+          amount: order.amount, // Amount is in currency subunits. Default currency is INR. Hence, 50000 refers to 50000 paise
+          currency: order.currency,
+          name: 'Mastercard code for change',
+          description: 'Test Transaction',
+          order_id: order.id, // This is the order_id created in the backend
+          callback_url: 'http://localhost:3000/payment-success', // Your success URL
+          prefill: {
+            name: 'Your Name',
+            email: 'your.email@example.com',
+            contact: '8176869875'
+          },
+          theme: {
+            color: '#F37254'
+          },
+          handler: function(response) {
+            // Handle the payment verification
+            fetch('/verify-payment', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json'
+              },
+              body: JSON.stringify({
+                razorpay_order_id: response.razorpay_order_id,
+                razorpay_payment_id: response.razorpay_payment_id,
+                razorpay_signature: response.razorpay_signature
+              })
+            }).then(res => res.json())
+              .then(data => {
+                if (data.status === 'ok') {
+                  window.location.href = '/payment-success';
+                } else {
+                  alert('Payment verification failed');
+                }
+              }).catch(error => {
+                console.log('Error: ', error);
+                alert('Error verifying payment');
+              });
+          }
+        };
+
+        const rzp = new Razorpay(options);
+        rzp.open();
+      } catch (error) {
+        console.error('Error:', error);
+        alert('An error occurred. Please try again.');
+      }
+    }
+  </script>
+</head>
+<body>
+  <div class="payment-container">
+    <h1>Razorpay Payment Gateway Integration</h1>
+    <form id="payment-form">
+      <label for="amount">Amount:</label>
+      <input type="number" id="amount" name="amount" required>
+      <button type="button" onclick="payNow()">Pay Now</button>
+    </form>
+  </div>
+</body>
+</html>
